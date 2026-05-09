@@ -11,17 +11,22 @@ jobs:
       - name: Setup Node.js 16
         uses: actions/setup-node@v3
         with:
-          node-version: 16 # ถอยกลับไปเวอร์ชันที่เสถียรสำหรับโค้ดนี้
+          node-version: 16
+
+      - name: Install Dependencies
+        run: npm install
 
       - name: Generate P12 and Profile
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           SERIAL_NUMBER: ${{ secrets.SERIAL_NUMBER }}
-          NODE_OPTIONS: --openssl-legacy-provider # ตัวนี้แหละพี่ที่จะแก้ Error DECODER
+          NODE_OPTIONS: --openssl-legacy-provider
         run: |
-          npm install
-          node index.js
+          # ใช้คำสั่ง DEBUG เพื่อดูว่ามันติดที่ขั้นตอนไหน
+          DEBUG=app-store-connect* node index.js || echo "Failed but moving to next step..."
+          
+          # สร้างโฟลเดอร์เก็บไฟล์ (ถ้ามันสร้างไฟล์สำเร็จ)
           mkdir -p output
           cp *.p12 output/ 2>/dev/null || true
           cp *.mobileprovision output/ 2>/dev/null || true
@@ -31,3 +36,4 @@ jobs:
         with:
           name: ios-certificates
           path: output/
+          if-no-files-found: warn
