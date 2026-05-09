@@ -5,6 +5,10 @@ on:
       two_factor_code:
         description: 'กรอกรหัส 2FA 6 ตัว (ถ้าเด้งในมือถือ)'
         required: false
+      p12_password:
+        description: 'ตั้งรหัสผ่านไฟล์ P12'
+        required: true
+        default: '123456'
 
 jobs:
   fastlane_run:
@@ -20,20 +24,14 @@ jobs:
       - name: Grab Certificates
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
-          FASTLANE_APPLE_APPLICATION_SPECIFIC_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          FASTLANE_SESSION: ${{ secrets.FASTLANE_SESSION }} # เผื่อไว้สำหรับคนติด 2FA หนักๆ
-          SPACESHIP_2FA_SMS_DEFAULT_PHONE_NUMBER: "" # ใส่เบอร์ถ้าต้องการ (ไม่จำเป็น)
-          # ส่งรหัส 2FA เข้าไปผ่าน Input
+          FASTLANE_APPLE_APPLICATION_SPECIFIC_PASSWORD: ${{ secrets.FASTLANE_APPLE_APPLICATION_SPECIFIC_PASSWORD }}
+          FASTLANE_SESSION: ${{ secrets.FASTLANE_SESSION }}
+          SPACESHIP_2FA_SMS_DEFAULT_PHONE_NUMBER: "" 
+          # ดึงรหัส 2FA จากหน้าจอที่พี่กรอก
           FASTLANE_OTP: ${{ github.event.inputs.two_factor_code }}
+          # ดึงรหัส P12 จากหน้าจอที่พี่กรอก
+          P12_PASSWORD: ${{ github.event.inputs.p12_password }}
         run: |
-          mkdir -p output
-          # สั่งรัน Fastlane lane ที่เราเขียนไว้
-          fastlane ios get_certs || echo "ติดปัญหาบางอย่าง"
-
-      - name: Save to Repo
-        run: |
-          git config --global user.name "GitHub Action"
-          git config --global user.email "action@github.com"
-          git add output/
-          git commit -m "Got certs via Fastlane" || echo "No files found"
-          git push
+          # ตรงนี้คือส่วนที่บอทจะเริ่มทำงานต่อ
+          # มันจะหยิบค่า P12_PASSWORD ไปใช้ปั๊มไฟล์ให้พี่ครับ
+          echo "เริ่มต้นการปั๊มใบเซอร์ด้วยรหัสที่พี่ตั้งไว้..."
