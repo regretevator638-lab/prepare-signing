@@ -1,0 +1,15 @@
+name: Get My P12
+on:
+  workflow_dispatch: # ตัวนี้แหละพี่ที่จะทำให้ปุ่ม Run โผล่!
+
+jobs:
+  generate:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Display Serial
+        run: echo "Using Serial ${{ secrets.SERIAL_NUMBER }}"
+      
+      # ตรงนี้คือจุดที่มันจะรันโค้ดดึงใบเซอร์ (ขึ้นอยู่กับเครื่องมือที่พี่เลือกมา)
