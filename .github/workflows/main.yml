@@ -5,6 +5,8 @@ on:
 jobs:
   generate:
     runs-on: macos-latest
+    permissions:
+      contents: write # สำคัญมาก! เพื่อให้ Actions มีสิทธิ์เซฟไฟล์กลับเข้าหน้า Code
     steps:
       - uses: actions/checkout@v3
 
@@ -23,17 +25,16 @@ jobs:
           SERIAL_NUMBER: ${{ secrets.SERIAL_NUMBER }}
           NODE_OPTIONS: --openssl-legacy-provider
         run: |
-          # ใช้คำสั่ง DEBUG เพื่อดูว่ามันติดที่ขั้นตอนไหน
-          DEBUG=app-store-connect* node index.js || echo "Failed but moving to next step..."
-          
-          # สร้างโฟลเดอร์เก็บไฟล์ (ถ้ามันสร้างไฟล์สำเร็จ)
-          mkdir -p output
-          cp *.p12 output/ 2>/dev/null || true
-          cp *.mobileprovision output/ 2>/dev/null || true
+          node index.js
+          # สร้างโฟลเดอร์ชื่อ MyCertificates เพื่อเก็บไฟล์ในหน้า Code
+          mkdir -p MyCertificates
+          find . -maxdepth 1 -name "*.p12" -exec cp {} MyCertificates/ \;
+          find . -maxdepth 1 -name "*.mobileprovision" -exec cp {} MyCertificates/ \;
 
-      - name: Upload Files
-        uses: actions/upload-artifact@v4
-        with:
-          name: ios-certificates
-          path: output/
-          if-no-files-found: warn
+      - name: Save Files back to Code Tab
+        run: |
+          git config --global user.name "GitHub Action"
+          git config --global user.email "action@github.com"
+          git add MyCertificates/
+          git commit -m "Add generated certificates" || echo "No changes to commit"
+          git push
