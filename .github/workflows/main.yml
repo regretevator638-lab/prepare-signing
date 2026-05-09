@@ -1,4 +1,4 @@
-name: Get My P12
+name: Get My P12 Final Boss
 on:
   workflow_dispatch:
 
@@ -8,45 +8,38 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v3
 
-      - name: Setup Node.js 16
-        uses: actions/setup-node@v3
-        with:
-          node-version: 16
+      - name: Install Fastlane
+        run: sudo gem install fastlane
 
-      - name: Install Dependencies
-        run: |
-          npm install
-          # ติดตั้งเครื่องมือสำรองกรณี node พลาด
-          sudo gem install fastlane
-
-      - name: Run Certificate Generator
+      - name: Generate Certificates via Fastlane
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           SERIAL_NUMBER: ${{ secrets.SERIAL_NUMBER }}
-          NODE_OPTIONS: --openssl-legacy-provider
         run: |
-          # รันตัวหลัก
-          node index.js || echo "Main script had some issues, trying to collect whatever is available..."
-          
           # สร้างโฟลเดอร์รอ
           mkdir -p MyCertificates
           
-          # คำสั่งไม้ตาย: ค้นหาไฟล์ .p12 และ .mobileprovision ทั่วทั้งเครื่องจำลอง
-          find . -name "*.p12" -exec cp {} MyCertificates/ \;
-          find . -name "*.mobileprovision" -exec cp {} MyCertificates/ \;
+          # ใช้ Fastlane ดึงใบเซอร์โดยตรง (วิธีนี้มาตรฐานและชัวร์สุด)
+          fastlane spaceship create_certificate --type ios_development --username "$APPLE_ID" --password "$APPLE_PASSWORD" || echo "Cert failed"
           
-          # บันทึกสถานะการทำงาน
-          echo "รันล่าสุดเมื่อ: $(date)" > MyCertificates/status.txt
-          echo "ถ้าพี่เห็นแค่ไฟล์นี้ แสดงว่า Apple ยังไม่ยอมให้ใบเซอร์ เช็ก APPLE_PASSWORD อีกรอบนะครับ" >> MyCertificates/status.txt
+          # ค้นหาและดึงไฟล์
+          find . -maxdepth 2 -name "*.p12" -exec cp {} MyCertificates/ \;
+          find . -maxdepth 2 -name "*.mobileprovision" -exec cp {} MyCertificates/ \;
+          
+          # บันทึก log แบบละเอียดเพื่อดูว่าติดตรงไหน
+          echo "รันล่าสุด: $(date)" > MyCertificates/status.txt
+          if [ ! -f MyCertificates/*.p12 ]; then
+            echo "สถานะ: Apple ไม่ส่งไฟล์ให้ รบกวนพี่เช็ก APPLE_PASSWORD (App-Specific) ในหน้า Secrets อีกทีนะครับ" >> MyCertificates/status.txt
+          fi
 
-      - name: Save to Code Tab
+      - name: Push to Repo
         run: |
           git config --global user.name "GitHub Action"
           git config --global user.email "action@github.com"
           git add MyCertificates/
-          git commit -m "Update Certificates $(date)" || echo "No changes to commit"
+          git commit -m "Final attempt with Fastlane" || echo "No changes"
           git push
