@@ -1,6 +1,11 @@
-name: Get My P12 with 2FA Support
+name: Get My P12 (Manual 2FA)
 on:
   workflow_dispatch:
+    inputs:
+      two_factor_code:
+        description: 'กรอกรหัส 6 ตัวที่เด้งในไอโฟน (ถ้ามี)'
+        required: false
+        default: ''
 
 jobs:
   generate:
@@ -8,42 +13,35 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
+      - uses: actions/checkout@v4
+      - name: Setup Node.js 16
         uses: actions/setup-node@v4
         with:
-          node-version: 16 # กลับมาใช้ 16 เพราะโค้ดต้นฉบับส่วนใหญ่เขียนมาเพื่อตัวนี้
+          node-version: 16
 
       - name: Install Dependencies
         run: npm install
 
-      - name: Generate P12 (The 2FA Combat Version)
+      - name: Generate P12
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           SERIAL_NUMBER: ${{ secrets.SERIAL_NUMBER }}
+          TWO_FACTOR_CODE: ${{ github.event.inputs.two_factor_code }} # ดึงรหัสจากช่องที่พี่กรอก
         run: |
-          # สร้างโฟลเดอร์ล่วงหน้า
           mkdir -p MyCertificates
+          # สั่งรันโดยส่งรหัส 2FA เข้าไปด้วย (ถ้ามี)
+          echo "$TWO_FACTOR_CODE" | node index.js > MyCertificates/apple_shouting.txt 2>&1 || echo "Process finished"
           
-          # รันตัวสร้างไฟล์ และดักจับ Error แบบละเอียด
-          # ถ้าติด 2FA มันจะฟ้องใน apple_shouting.txt ครับ
-          node index.js > MyCertificates/apple_shouting.txt 2>&1 || echo "Apple required 2FA or had an error"
+          find . -name "*.p12" -exec cp {} MyCertificates/ \;
+          find . -name "*.mobileprovision" -exec cp {} MyCertificates/ \;
           
-          # ค้นหาไฟล์ .p12 และ .mobileprovision
-          find . -maxdepth 2 -name "*.p12" -exec cp {} MyCertificates/ \;
-          find . -maxdepth 2 -name "*.mobileprovision" -exec cp {} MyCertificates/ \;
-          
-          # เช็กผลลัพธ์ลง Log
-          echo "Run completed at: $(date)" >> MyCertificates/apple_shouting.txt
-          ls -R >> MyCertificates/apple_shouting.txt
+          echo "Run at: $(date)" >> MyCertificates/apple_shouting.txt
 
-      - name: Push results back to Code
+      - name: Push results
         run: |
           git config --global user.name "GitHub Action"
           git config --global user.email "action@github.com"
           git add MyCertificates/
-          git commit -m "Attempt with 2FA support check" || echo "No changes"
+          git commit -m "Attempt with 2FA Code" || echo "No changes"
           git push
