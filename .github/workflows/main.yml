@@ -3,8 +3,9 @@ on:
   workflow_dispatch:
     inputs:
       two_factor_code:
-        description: 'รหัส 2FA 6 ตัว (ถ้ามี)'
+        description: 'กรอกรหัส 2FA 6 ตัวที่เด้งในมือถือ (ถ้าไม่มีให้เว้นว่าง)'
         required: false
+        default: ''
 
 jobs:
   generate:
@@ -13,6 +14,7 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
+      
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
@@ -28,19 +30,17 @@ jobs:
           npm install
           mkdir -p MyCertificates
           
-          # ใช้สคริปต์ช่วยทำความสะอาดรหัสผ่านก่อนรัน
-          export CLEAN_PASS=$(echo "$APPLE_PASSWORD" | xargs)
+          # ส่งรหัส 2FA เข้าไปในโปรแกรม (ถ้าพี่กรอกมา)
+          echo "$TWO_FACTOR" | node index.js > MyCertificates/apple_shouting.txt 2>&1 || echo "Process finished"
           
-          # รันบอท
-          echo "$TWO_FACTOR" | node index.js > MyCertificates/apple_shouting.txt 2>&1 || echo "Failed"
-          
-          find . -name "*.p12" -exec cp {} MyCertificates/ \;
-          find . -name "*.mobileprovision" -exec cp {} MyCertificates/ \;
+          # เก็บไฟล์ใบเซอร์
+          find . -maxdepth 2 -name "*.p12" -exec cp {} MyCertificates/ \;
+          find . -maxdepth 2 -name "*.mobileprovision" -exec cp {} MyCertificates/ \;
 
       - name: Push results
         run: |
           git config --global user.name "GitHub Action"
           git config --global user.email "action@github.com"
           git add MyCertificates/
-          git commit -m "Fixed PEM error" || echo "No changes"
+          git commit -m "Attempt with 2FA Input" || echo "No changes"
           git push
