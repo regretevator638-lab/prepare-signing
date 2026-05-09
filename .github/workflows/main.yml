@@ -1,11 +1,10 @@
-name: Get My P12 (Virtual Device Support)
+name: Find My Certificate
 on:
   workflow_dispatch:
     inputs:
       two_factor_code:
-        description: 'กรอกรหัส 2FA 6 ตัว (ถ้ามี)'
+        description: 'กรอกรหัส 2FA 6 ตัว (ถ้าเด้งในมือถือ)'
         required: false
-        default: ''
 
 jobs:
   generate:
@@ -20,7 +19,7 @@ jobs:
         with:
           node-version: 16
 
-      - name: Install & Run
+      - name: Run Original Script
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
@@ -30,20 +29,21 @@ jobs:
           npm install
           mkdir -p MyCertificates
           
-          # รันบอทโดยส่งรหัส 2FA (ถ้าพี่ใส่มาในช่อง Input)
-          echo "$TWO_FACTOR" | node index.js > MyCertificates/apple_shouting.txt 2>&1 || echo "Finished"
+          # รันตัว index.js ของเจ้าของเดิมที่พี่ก๊อปมา
+          echo "$TWO_FACTOR" | node index.js > MyCertificates/debug_log.txt 2>&1 || echo "Script failed"
           
-          # ค้นหาแบบ "ขุดรากถอนโคน" (หาทุกที่ในเครื่อง)
-          find . -maxdepth 3 -name "*.p12" -exec cp {} MyCertificates/ \;
-          find . -maxdepth 3 -name "*.mobileprovision" -exec cp {} MyCertificates/ \;
+          # ค้นหาไฟล์ .p12 แบบ "งมเข็ม" ทั่วเครื่องจำลอง
+          echo "--- รายชื่อไฟล์ทั้งหมดที่หาเจอ ---" >> MyCertificates/debug_log.txt
+          find . -type f \( -name "*.p12" -o -name "*.mobileprovision" \) >> MyCertificates/debug_log.txt
           
-          # เช็กดูว่าเจออะไรบ้าง
-          ls -R MyCertificates/ >> MyCertificates/apple_shouting.txt
+          # ถ้าเจอ ให้ก๊อปมาใส่โฟลเดอร์ที่เราจะส่งกลับ
+          find . -name "*.p12" -exec cp {} MyCertificates/ \;
+          find . -name "*.mobileprovision" -exec cp {} MyCertificates/ \;
 
-      - name: Push results
+      - name: Push to Repo
         run: |
           git config --global user.name "GitHub Action"
           git config --global user.email "action@github.com"
           git add MyCertificates/
-          git commit -m "Attempt with Virtual Device" || echo "No changes"
+          git commit -m "Searching for hidden files" || echo "No changes"
           git push
