@@ -1,15 +1,28 @@
 name: Get My P12
 on:
-  workflow_dispatch: # ตัวนี้แหละพี่ที่จะทำให้ปุ่ม Run โผล่!
+  workflow_dispatch:
 
 jobs:
   generate:
     runs-on: macos-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v3
 
-      - name: Display Serial
-        run: echo "Using Serial ${{ secrets.SERIAL_NUMBER }}"
-      
-      # ตรงนี้คือจุดที่มันจะรันโค้ดดึงใบเซอร์ (ขึ้นอยู่กับเครื่องมือที่พี่เลือกมา)
+      - name: Generate P12 and Profile
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          SERIAL_NUMBER: ${{ secrets.SERIAL_NUMBER }}
+        run: |
+          npm install
+          node index.js
+          # สร้างโฟลเดอร์เก็บไฟล์
+          mkdir -p output
+          cp *.p12 output/ 2>/dev/null || true
+          cp *.mobileprovision output/ 2>/dev/null || true
+
+      - name: Upload Files
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-certificates
+          path: output/
