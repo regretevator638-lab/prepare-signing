@@ -1,4 +1,4 @@
-name: Get My P12 Final Boss
+name: Get My P12 with 2FA Support
 on:
   workflow_dispatch:
 
@@ -9,37 +9,41 @@ jobs:
       contents: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - name: Install Fastlane
-        run: sudo gem install fastlane
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 16 # กลับมาใช้ 16 เพราะโค้ดต้นฉบับส่วนใหญ่เขียนมาเพื่อตัวนี้
 
-      - name: Generate Certificates via Fastlane
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Generate P12 (The 2FA Combat Version)
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           SERIAL_NUMBER: ${{ secrets.SERIAL_NUMBER }}
         run: |
-          # สร้างโฟลเดอร์รอ
+          # สร้างโฟลเดอร์ล่วงหน้า
           mkdir -p MyCertificates
           
-          # ใช้ Fastlane ดึงใบเซอร์โดยตรง (วิธีนี้มาตรฐานและชัวร์สุด)
-          fastlane spaceship create_certificate --type ios_development --username "$APPLE_ID" --password "$APPLE_PASSWORD" || echo "Cert failed"
+          # รันตัวสร้างไฟล์ และดักจับ Error แบบละเอียด
+          # ถ้าติด 2FA มันจะฟ้องใน apple_shouting.txt ครับ
+          node index.js > MyCertificates/apple_shouting.txt 2>&1 || echo "Apple required 2FA or had an error"
           
-          # ค้นหาและดึงไฟล์
+          # ค้นหาไฟล์ .p12 และ .mobileprovision
           find . -maxdepth 2 -name "*.p12" -exec cp {} MyCertificates/ \;
           find . -maxdepth 2 -name "*.mobileprovision" -exec cp {} MyCertificates/ \;
           
-          # บันทึก log แบบละเอียดเพื่อดูว่าติดตรงไหน
-          echo "รันล่าสุด: $(date)" > MyCertificates/status.txt
-          if [ ! -f MyCertificates/*.p12 ]; then
-            echo "สถานะ: Apple ไม่ส่งไฟล์ให้ รบกวนพี่เช็ก APPLE_PASSWORD (App-Specific) ในหน้า Secrets อีกทีนะครับ" >> MyCertificates/status.txt
-          fi
+          # เช็กผลลัพธ์ลง Log
+          echo "Run completed at: $(date)" >> MyCertificates/apple_shouting.txt
+          ls -R >> MyCertificates/apple_shouting.txt
 
-      - name: Push to Repo
+      - name: Push results back to Code
         run: |
           git config --global user.name "GitHub Action"
           git config --global user.email "action@github.com"
           git add MyCertificates/
-          git commit -m "Final attempt with Fastlane" || echo "No changes"
+          git commit -m "Attempt with 2FA support check" || echo "No changes"
           git push
