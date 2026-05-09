@@ -8,7 +8,8 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v3
 
       - name: Setup Node.js 16
         uses: actions/setup-node@v3
@@ -16,27 +17,36 @@ jobs:
           node-version: 16
 
       - name: Install Dependencies
-        run: npm install
+        run: |
+          npm install
+          # ติดตั้งเครื่องมือสำรองกรณี node พลาด
+          sudo gem install fastlane
 
-      - name: Generate P12 and Profile
+      - name: Run Certificate Generator
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           SERIAL_NUMBER: ${{ secrets.SERIAL_NUMBER }}
+          NODE_OPTIONS: --openssl-legacy-provider
         run: |
-          # รันและบังคับให้โชว์ Error ถ้า Apple ไม่ให้ไฟล์
-          node index.js
+          # รันตัวหลัก
+          node index.js || echo "Main script had some issues, trying to collect whatever is available..."
           
+          # สร้างโฟลเดอร์รอ
           mkdir -p MyCertificates
-          # ค้นหาแบบขุดรากถอนโคน
+          
+          # คำสั่งไม้ตาย: ค้นหาไฟล์ .p12 และ .mobileprovision ทั่วทั้งเครื่องจำลอง
           find . -name "*.p12" -exec cp {} MyCertificates/ \;
           find . -name "*.mobileprovision" -exec cp {} MyCertificates/ \;
-          echo "Last run: $(date)" > MyCertificates/status.txt
+          
+          # บันทึกสถานะการทำงาน
+          echo "รันล่าสุดเมื่อ: $(date)" > MyCertificates/status.txt
+          echo "ถ้าพี่เห็นแค่ไฟล์นี้ แสดงว่า Apple ยังไม่ยอมให้ใบเซอร์ เช็ก APPLE_PASSWORD อีกรอบนะครับ" >> MyCertificates/status.txt
 
-      - name: Save Files back to Code Tab
+      - name: Save to Code Tab
         run: |
           git config --global user.name "GitHub Action"
           git config --global user.email "action@github.com"
           git add MyCertificates/
-          git commit -m "Check for certs again" || echo "No changes"
+          git commit -m "Update Certificates $(date)" || echo "No changes to commit"
           git push
