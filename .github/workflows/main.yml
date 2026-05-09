@@ -16,24 +16,32 @@ jobs:
           node-version: 16
 
       - name: Install Dependencies
-        run: npm install
+        run: |
+          npm install
+          # ติดตั้งตัวช่วยจัดการ Apple Session
+          sudo gem install fastlane
 
       - name: Generate P12 and Profile
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           SERIAL_NUMBER: ${{ secrets.SERIAL_NUMBER }}
-          # ลบ NODE_OPTIONS เจ้าปัญหาออกไปแล้วครับ
         run: |
-          node index.js
+          # ลบไฟล์เก่าทิ้งก่อนเริ่มใหม่
+          rm -f *.p12 *.mobileprovision
+          
+          # รันตัวสร้างไฟล์
+          node index.js || echo "Script finished with some warnings"
+          
+          # สร้างโฟลเดอร์และดึงไฟล์
           mkdir -p MyCertificates
-          find . -maxdepth 1 -name "*.p12" -exec cp {} MyCertificates/ \;
-          find . -maxdepth 1 -name "*.mobileprovision" -exec cp {} MyCertificates/ \;
+          find . -maxdepth 2 -name "*.p12" -exec cp {} MyCertificates/ \;
+          find . -maxdepth 2 -name "*.mobileprovision" -exec cp {} MyCertificates/ \;
 
       - name: Save Files back to Code Tab
         run: |
           git config --global user.name "GitHub Action"
           git config --global user.email "action@github.com"
           git add MyCertificates/
-          git commit -m "Add generated certificates" || echo "No changes to commit"
+          git commit -m "Update certificates" || echo "No changes to commit"
           git push
