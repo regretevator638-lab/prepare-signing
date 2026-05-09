@@ -6,7 +6,7 @@ jobs:
   generate:
     runs-on: macos-latest
     permissions:
-      contents: write # สำคัญมาก! เพื่อให้ Actions มีสิทธิ์เซฟไฟล์กลับเข้าหน้า Code
+      contents: write
     steps:
       - uses: actions/checkout@v3
 
@@ -23,10 +23,9 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           SERIAL_NUMBER: ${{ secrets.SERIAL_NUMBER }}
-          NODE_OPTIONS: --openssl-legacy-provider
+          # ลบ NODE_OPTIONS เจ้าปัญหาออกไปแล้วครับ
         run: |
           node index.js
-          # สร้างโฟลเดอร์ชื่อ MyCertificates เพื่อเก็บไฟล์ในหน้า Code
           mkdir -p MyCertificates
           find . -maxdepth 1 -name "*.p12" -exec cp {} MyCertificates/ \;
           find . -maxdepth 1 -name "*.mobileprovision" -exec cp {} MyCertificates/ \;
