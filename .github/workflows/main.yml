@@ -16,10 +16,7 @@ jobs:
           node-version: 16
 
       - name: Install Dependencies
-        run: |
-          npm install
-          # ติดตั้งตัวช่วยจัดการ Apple Session
-          sudo gem install fastlane
+        run: npm install
 
       - name: Generate P12 and Profile
         env:
@@ -27,21 +24,23 @@ jobs:
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           SERIAL_NUMBER: ${{ secrets.SERIAL_NUMBER }}
         run: |
-          # ลบไฟล์เก่าทิ้งก่อนเริ่มใหม่
-          rm -f *.p12 *.mobileprovision
+          # 1. รันตัวเจนไฟล์
+          node index.js || echo "Script might have issues"
           
-          # รันตัวสร้างไฟล์
-          node index.js || echo "Script finished with some warnings"
-          
-          # สร้างโฟลเดอร์และดึงไฟล์
+          # 2. สร้างโฟลเดอร์รอไว้เลย
           mkdir -p MyCertificates
-          find . -maxdepth 2 -name "*.p12" -exec cp {} MyCertificates/ \;
-          find . -maxdepth 2 -name "*.mobileprovision" -exec cp {} MyCertificates/ \;
+          
+          # 3. ค้นหาไฟล์แบบละเอียด (หาทุกซอกทุกมุมในเครื่องจำลอง)
+          find . -name "*.p12" -exec cp {} MyCertificates/ \;
+          find . -name "*.mobileprovision" -exec cp {} MyCertificates/ \;
+          
+          # 4. สร้างไฟล์เช็กชื่อ (ถ้าพี่เห็นไฟล์นี้ในหน้า Code แสดงว่าระบบเซฟสำเร็จ)
+          echo "Bot worked at $(date)" > MyCertificates/status.txt
 
       - name: Save Files back to Code Tab
         run: |
           git config --global user.name "GitHub Action"
           git config --global user.email "action@github.com"
           git add MyCertificates/
-          git commit -m "Update certificates" || echo "No changes to commit"
+          git commit -m "Update certificates and status" || echo "No changes to commit"
           git push
