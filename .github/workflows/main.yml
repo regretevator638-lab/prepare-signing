@@ -1,4 +1,4 @@
-name: Find My Certificate
+name: Fastlane P12 Grabber
 on:
   workflow_dispatch:
     inputs:
@@ -7,43 +7,33 @@ on:
         required: false
 
 jobs:
-  generate:
+  fastlane_run:
     runs-on: macos-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 16
 
-      - name: Run Original Script
+      - name: Set up Fastlane
+        run: brew install fastlane
+
+      - name: Grab Certificates
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          SERIAL_NUMBER: ${{ secrets.SERIAL_NUMBER }}
-          TWO_FACTOR: ${{ github.event.inputs.two_factor_code }}
+          FASTLANE_APPLE_APPLICATION_SPECIFIC_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          FASTLANE_SESSION: ${{ secrets.FASTLANE_SESSION }} # เผื่อไว้สำหรับคนติด 2FA หนักๆ
+          SPACESHIP_2FA_SMS_DEFAULT_PHONE_NUMBER: "" # ใส่เบอร์ถ้าต้องการ (ไม่จำเป็น)
+          # ส่งรหัส 2FA เข้าไปผ่าน Input
+          FASTLANE_OTP: ${{ github.event.inputs.two_factor_code }}
         run: |
-          npm install
-          mkdir -p MyCertificates
-          
-          # รันตัว index.js ของเจ้าของเดิมที่พี่ก๊อปมา
-          echo "$TWO_FACTOR" | node index.js > MyCertificates/debug_log.txt 2>&1 || echo "Script failed"
-          
-          # ค้นหาไฟล์ .p12 แบบ "งมเข็ม" ทั่วเครื่องจำลอง
-          echo "--- รายชื่อไฟล์ทั้งหมดที่หาเจอ ---" >> MyCertificates/debug_log.txt
-          find . -type f \( -name "*.p12" -o -name "*.mobileprovision" \) >> MyCertificates/debug_log.txt
-          
-          # ถ้าเจอ ให้ก๊อปมาใส่โฟลเดอร์ที่เราจะส่งกลับ
-          find . -name "*.p12" -exec cp {} MyCertificates/ \;
-          find . -name "*.mobileprovision" -exec cp {} MyCertificates/ \;
+          mkdir -p output
+          # สั่งรัน Fastlane lane ที่เราเขียนไว้
+          fastlane ios get_certs || echo "ติดปัญหาบางอย่าง"
 
-      - name: Push to Repo
+      - name: Save to Repo
         run: |
           git config --global user.name "GitHub Action"
           git config --global user.email "action@github.com"
-          git add MyCertificates/
-          git commit -m "Searching for hidden files" || echo "No changes"
+          git add output/
+          git commit -m "Got certs via Fastlane" || echo "No files found"
           git push
