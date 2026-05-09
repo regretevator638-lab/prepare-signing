@@ -1,11 +1,10 @@
-name: Get My P12 (Manual 2FA)
+name: Get My P12 Fixed
 on:
   workflow_dispatch:
     inputs:
       two_factor_code:
-        description: 'กรอกรหัส 6 ตัวที่เด้งในไอโฟน (ถ้ามี)'
+        description: 'รหัส 2FA 6 ตัว (ถ้ามี)'
         required: false
-        default: ''
 
 jobs:
   generate:
@@ -14,34 +13,34 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Setup Node.js 16
+      - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: 16
 
-      - name: Install Dependencies
-        run: npm install
-
-      - name: Generate P12
+      - name: Clean & Run
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           SERIAL_NUMBER: ${{ secrets.SERIAL_NUMBER }}
-          TWO_FACTOR_CODE: ${{ github.event.inputs.two_factor_code }} # ดึงรหัสจากช่องที่พี่กรอก
+          TWO_FACTOR: ${{ github.event.inputs.two_factor_code }}
         run: |
+          npm install
           mkdir -p MyCertificates
-          # สั่งรันโดยส่งรหัส 2FA เข้าไปด้วย (ถ้ามี)
-          echo "$TWO_FACTOR_CODE" | node index.js > MyCertificates/apple_shouting.txt 2>&1 || echo "Process finished"
+          
+          # ใช้สคริปต์ช่วยทำความสะอาดรหัสผ่านก่อนรัน
+          export CLEAN_PASS=$(echo "$APPLE_PASSWORD" | xargs)
+          
+          # รันบอท
+          echo "$TWO_FACTOR" | node index.js > MyCertificates/apple_shouting.txt 2>&1 || echo "Failed"
           
           find . -name "*.p12" -exec cp {} MyCertificates/ \;
           find . -name "*.mobileprovision" -exec cp {} MyCertificates/ \;
-          
-          echo "Run at: $(date)" >> MyCertificates/apple_shouting.txt
 
       - name: Push results
         run: |
           git config --global user.name "GitHub Action"
           git config --global user.email "action@github.com"
           git add MyCertificates/
-          git commit -m "Attempt with 2FA Code" || echo "No changes"
+          git commit -m "Fixed PEM error" || echo "No changes"
           git push
