@@ -1,2 +1,2 @@
-รันล่าสุด: Sat May  9 11:22:45 UTC 2026
+รันล่าสุด: Sat May  9 11:25:48 UTC 2026
 สถานะ: Apple ไม่ส่งไฟล์ให้ รบกวนพี่เช็ก APPLE_PASSWORD (App-Specific) ในหน้า Secrets อีกทีนะครับ
