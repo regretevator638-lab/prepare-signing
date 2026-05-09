@@ -8,15 +8,20 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
+      - name: Setup Node.js 16
+        uses: actions/setup-node@v3
+        with:
+          node-version: 16 # ถอยกลับไปเวอร์ชันที่เสถียรสำหรับโค้ดนี้
+
       - name: Generate P12 and Profile
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           SERIAL_NUMBER: ${{ secrets.SERIAL_NUMBER }}
+          NODE_OPTIONS: --openssl-legacy-provider # ตัวนี้แหละพี่ที่จะแก้ Error DECODER
         run: |
           npm install
           node index.js
-          # สร้างโฟลเดอร์เก็บไฟล์
           mkdir -p output
           cp *.p12 output/ 2>/dev/null || true
           cp *.mobileprovision output/ 2>/dev/null || true
