@@ -1,9 +1,9 @@
-name: Get My P12 Fixed
+name: Get My P12 (Virtual Device Support)
 on:
   workflow_dispatch:
     inputs:
       two_factor_code:
-        description: 'กรอกรหัส 2FA 6 ตัวที่เด้งในมือถือ (ถ้าไม่มีให้เว้นว่าง)'
+        description: 'กรอกรหัส 2FA 6 ตัว (ถ้ามี)'
         required: false
         default: ''
 
@@ -20,7 +20,7 @@ jobs:
         with:
           node-version: 16
 
-      - name: Clean & Run
+      - name: Install & Run
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
@@ -30,17 +30,20 @@ jobs:
           npm install
           mkdir -p MyCertificates
           
-          # ส่งรหัส 2FA เข้าไปในโปรแกรม (ถ้าพี่กรอกมา)
-          echo "$TWO_FACTOR" | node index.js > MyCertificates/apple_shouting.txt 2>&1 || echo "Process finished"
+          # รันบอทโดยส่งรหัส 2FA (ถ้าพี่ใส่มาในช่อง Input)
+          echo "$TWO_FACTOR" | node index.js > MyCertificates/apple_shouting.txt 2>&1 || echo "Finished"
           
-          # เก็บไฟล์ใบเซอร์
-          find . -maxdepth 2 -name "*.p12" -exec cp {} MyCertificates/ \;
-          find . -maxdepth 2 -name "*.mobileprovision" -exec cp {} MyCertificates/ \;
+          # ค้นหาแบบ "ขุดรากถอนโคน" (หาทุกที่ในเครื่อง)
+          find . -maxdepth 3 -name "*.p12" -exec cp {} MyCertificates/ \;
+          find . -maxdepth 3 -name "*.mobileprovision" -exec cp {} MyCertificates/ \;
+          
+          # เช็กดูว่าเจออะไรบ้าง
+          ls -R MyCertificates/ >> MyCertificates/apple_shouting.txt
 
       - name: Push results
         run: |
           git config --global user.name "GitHub Action"
           git config --global user.email "action@github.com"
           git add MyCertificates/
-          git commit -m "Attempt with 2FA Input" || echo "No changes"
+          git commit -m "Attempt with Virtual Device" || echo "No changes"
           git push
