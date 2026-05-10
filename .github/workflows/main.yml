@@ -51,7 +51,8 @@ jobs:
       - name: Fetch Development Certificate
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
-          FASTLANE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          FASTLANE_PASSWORD: ${{ secrets.APPLE_PASSWORD }} # เติมเพื่อความชัวร์
           TEAM_ID: ${{ secrets.TEAM_ID }}
           MATCH_PASSWORD: ${{ secrets.CERT_PASSWORD }}
         run: |
@@ -66,7 +67,8 @@ jobs:
       - name: Fetch Development Provisioning Profile
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
-          FASTLANE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          FASTLANE_PASSWORD: ${{ secrets.APPLE_PASSWORD }} # เติมเพื่อความชัวร์
           TEAM_ID: ${{ secrets.TEAM_ID }}
         run: |
           fastlane sigh \
