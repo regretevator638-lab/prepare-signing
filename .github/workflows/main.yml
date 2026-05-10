@@ -11,7 +11,7 @@ on:
 jobs:
   fetch-certs:
     runs-on: macos-latest
-    
+
     steps:
       # ─── 1. Checkout ───────────────────────────────────────────
       - name: Checkout Repository
@@ -51,7 +51,7 @@ jobs:
       - name: Fetch Development Certificate
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          FASTLANE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           TEAM_ID: ${{ secrets.TEAM_ID }}
           MATCH_PASSWORD: ${{ secrets.CERT_PASSWORD }}
         run: |
@@ -61,13 +61,12 @@ jobs:
             --team_id "$TEAM_ID" \
             --output_path "./certs-output" \
             --generate_apple_certs true
-        continue-on-error: false
 
       # ─── 6. Fetch Development Provisioning Profile ─────────────
       - name: Fetch Development Provisioning Profile
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          FASTLANE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           TEAM_ID: ${{ secrets.TEAM_ID }}
         run: |
           fastlane sigh \
@@ -78,20 +77,15 @@ jobs:
             --output_path "./certs-output" \
             --force \
             --skip_install
-        continue-on-error: false
 
       # ─── 7. Convert .cer to .p12 (if needed) ───────────────────
       - name: Convert Certificate to P12
         run: |
           cd ./certs-output
-          
-          # ค้นหาไฟล์ .cer ที่ถูกสร้าง
           CER_FILE=$(find . -name "*.cer" | head -1)
           KEY_FILE=$(find . -name "*.p12" | head -1)
-          
           if [ -n "$CER_FILE" ] && [ -z "$KEY_FILE" ]; then
             echo "Converting $CER_FILE to .p12..."
-            # Import to keychain แล้ว export
             security import "$CER_FILE" -k ~/Library/Keychains/login.keychain-db
             security export \
               -k ~/Library/Keychains/login.keychain-db \
@@ -113,15 +107,10 @@ jobs:
         run: |
           echo "📁 Files in ./certs-output:"
           ls -lah ./certs-output/
-          
           P12_COUNT=$(find ./certs-output -name "*.p12" | wc -l)
           MP_COUNT=$(find ./certs-output -name "*.mobileprovision" | wc -l)
-          
-          echo ""
-          echo "📊 Summary:"
           echo "  - .p12 files: $P12_COUNT"
           echo "  - .mobileprovision files: $MP_COUNT"
-          
           if [ "$P12_COUNT" -eq 0 ] || [ "$MP_COUNT" -eq 0 ]; then
             echo "❌ Missing required files!"
             exit 1
@@ -133,7 +122,7 @@ jobs:
         with:
           name: ios-development-certificate
           path: ./certs-output/*.p12
-          retention-days: 3    # เก็บแค่ 3 วันเพื่อความปลอดภัย
+          retention-days: 3
           if-no-files-found: error
 
       - name: Upload Provisioning Profile
@@ -144,7 +133,7 @@ jobs:
           retention-days: 3
           if-no-files-found: error
 
-      # ─── 10. Cleanup sensitive files ───────────────────────────
+      # ─── 10. Cleanup ───────────────────────────────────────────
       - name: Cleanup Sensitive Files from Runner
         if: always()
         run: |
