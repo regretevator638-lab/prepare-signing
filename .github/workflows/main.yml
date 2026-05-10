@@ -1,37 +1,35 @@
-name: Fastlane P12 Grabber
+name: Generate iOS Certs
 on:
-  workflow_dispatch:
-    inputs:
-      two_factor_code:
-        description: 'กรอกรหัส 2FA 6 ตัว (ถ้าเด้งในมือถือ)'
-        required: false
-      p12_password:
-        description: 'ตั้งรหัสผ่านไฟล์ P12'
-        required: true
-        default: '123456'
+  workflow_dispatch: # กดรันเองด้วยมือจากหน้า GitHub
 
 jobs:
-  fastlane_run:
-    runs-on: macos-latest
-    permissions:
-      contents: write
+  build:
+    runs-on: macos-latest # เรียกใช้เครื่อง Mac จำลองฟรีจาก GitHub
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
-      - name: Set up Fastlane
-        run: brew install fastlane
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2'
 
-      - name: Grab Certificates
+      - name: Install Fastlane
+        run: gem install fastlane
+
+      - name: Fetch Certificates (The Core)
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
-          FASTLANE_APPLE_APPLICATION_SPECIFIC_PASSWORD: ${{ secrets.FASTLANE_APPLE_APPLICATION_SPECIFIC_PASSWORD }}
-          FASTLANE_SESSION: ${{ secrets.FASTLANE_SESSION }}
-          SPACESHIP_2FA_SMS_DEFAULT_PHONE_NUMBER: "" 
-          # ดึงรหัส 2FA จากหน้าจอที่พี่กรอก
-          FASTLANE_OTP: ${{ github.event.inputs.two_factor_code }}
-          # ดึงรหัส P12 จากหน้าจอที่พี่กรอก
-          P12_PASSWORD: ${{ github.event.inputs.p12_password }}
+          FASTLANE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
         run: |
-          # ตรงนี้คือส่วนที่บอทจะเริ่มทำงานต่อ
-          # มันจะหยิบค่า P12_PASSWORD ไปใช้ปั๊มไฟล์ให้พี่ครับ
-          echo "เริ่มต้นการปั๊มใบเซอร์ด้วยรหัสที่พี่ตั้งไว้..."
+          # ตรงนี้คือส่วนที่พี่ต้องเขียนสคริปต์สั่ง Fastlane 
+          # ให้ไปคุยกับ Apple เพื่อเอา .p12 และ .mobileprovision ออกมา
+          echo "เริ่มกระบวนการดึงไฟล์จาก Apple..."
+          # fastlane sigh --development (ตัวอย่างคำสั่งดึงไฟล์ฟันเฟือง)
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-certificates
+          path: ./*.mobileprovision # สั่งให้เก็บไฟล์ฟันเฟืองที่ได้ออกมาให้พี่โหลด
