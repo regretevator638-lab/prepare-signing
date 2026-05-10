@@ -1,35 +1,153 @@
-name: Generate iOS Certs
+name: Fetch iOS Certificates & Provisioning Profiles
+
 on:
-  workflow_dispatch: # กดรันเองด้วยมือจากหน้า GitHub
+  workflow_dispatch:
+    inputs:
+      app_identifier:
+        description: 'App Bundle ID (e.g. com.yourname.app)'
+        required: true
+        default: 'com.example.myapp'
 
 jobs:
-  build:
-    runs-on: macos-latest # เรียกใช้เครื่อง Mac จำลองฟรีจาก GitHub
-
+  fetch-certs:
+    runs-on: macos-latest
+    
     steps:
-      - name: Checkout Code
+      # ─── 1. Checkout ───────────────────────────────────────────
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Set up Ruby
+      # ─── 2. Setup Ruby + Fastlane ──────────────────────────────
+      - name: Setup Ruby
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: '3.2'
+          bundler-cache: true
 
       - name: Install Fastlane
-        run: gem install fastlane
+        run: gem install fastlane --no-document
 
-      - name: Fetch Certificates (The Core)
+      # ─── 3. Setup Fastlane Session (2FA Bypass) ────────────────
+      - name: Configure Fastlane Session for 2FA
+        env:
+          FASTLANE_SESSION: ${{ secrets.FASTLANE_SESSION }}
+          FASTLANE_APPLE_APPLICATION_SPECIFIC_PASSWORD: ${{ secrets.APP_SPECIFIC_PASSWORD }}
+        run: |
+          if [ -n "$FASTLANE_SESSION" ]; then
+            echo "✅ Using FASTLANE_SESSION for 2FA bypass"
+            echo "FASTLANE_SESSION=$FASTLANE_SESSION" >> $GITHUB_ENV
+          elif [ -n "$FASTLANE_APPLE_APPLICATION_SPECIFIC_PASSWORD" ]; then
+            echo "✅ Using App-Specific Password"
+            echo "FASTLANE_APPLE_APPLICATION_SPECIFIC_PASSWORD=$FASTLANE_APPLE_APPLICATION_SPECIFIC_PASSWORD" >> $GITHUB_ENV
+          else
+            echo "⚠️  No 2FA method found. Will attempt direct login (may fail)."
+          fi
+
+      # ─── 4. Create output directory ────────────────────────────
+      - name: Create Output Directory
+        run: mkdir -p ./certs-output
+
+      # ─── 5. Fetch Development Certificate (.p12) ───────────────
+      - name: Fetch Development Certificate
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
-          FASTLANE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          TEAM_ID: ${{ secrets.TEAM_ID }}
+          MATCH_PASSWORD: ${{ secrets.CERT_PASSWORD }}
         run: |
-          # ตรงนี้คือส่วนที่พี่ต้องเขียนสคริปต์สั่ง Fastlane 
-          # ให้ไปคุยกับ Apple เพื่อเอา .p12 และ .mobileprovision ออกมา
-          echo "เริ่มกระบวนการดึงไฟล์จาก Apple..."
-          # fastlane sigh --development (ตัวอย่างคำสั่งดึงไฟล์ฟันเฟือง)
+          fastlane cert \
+            --development \
+            --username "$APPLE_ID" \
+            --team_id "$TEAM_ID" \
+            --output_path "./certs-output" \
+            --generate_apple_certs true
+        continue-on-error: false
 
-      - name: Upload Artifacts
+      # ─── 6. Fetch Development Provisioning Profile ─────────────
+      - name: Fetch Development Provisioning Profile
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          TEAM_ID: ${{ secrets.TEAM_ID }}
+        run: |
+          fastlane sigh \
+            --development \
+            --username "$APPLE_ID" \
+            --team_id "$TEAM_ID" \
+            --app_identifier "${{ github.event.inputs.app_identifier }}" \
+            --output_path "./certs-output" \
+            --force \
+            --skip_install
+        continue-on-error: false
+
+      # ─── 7. Convert .cer to .p12 (if needed) ───────────────────
+      - name: Convert Certificate to P12
+        run: |
+          cd ./certs-output
+          
+          # ค้นหาไฟล์ .cer ที่ถูกสร้าง
+          CER_FILE=$(find . -name "*.cer" | head -1)
+          KEY_FILE=$(find . -name "*.p12" | head -1)
+          
+          if [ -n "$CER_FILE" ] && [ -z "$KEY_FILE" ]; then
+            echo "Converting $CER_FILE to .p12..."
+            # Import to keychain แล้ว export
+            security import "$CER_FILE" -k ~/Library/Keychains/login.keychain-db
+            security export \
+              -k ~/Library/Keychains/login.keychain-db \
+              -t identities \
+              -f pkcs12 \
+              -P "${{ secrets.CERT_PASSWORD }}" \
+              -o "development_certificate.p12"
+            echo "✅ P12 exported"
+          elif [ -n "$KEY_FILE" ]; then
+            echo "✅ P12 already exists: $KEY_FILE"
+          else
+            echo "❌ No certificate file found"
+            ls -la
+            exit 1
+          fi
+
+      # ─── 8. List output files ──────────────────────────────────
+      - name: List Generated Files
+        run: |
+          echo "📁 Files in ./certs-output:"
+          ls -lah ./certs-output/
+          
+          P12_COUNT=$(find ./certs-output -name "*.p12" | wc -l)
+          MP_COUNT=$(find ./certs-output -name "*.mobileprovision" | wc -l)
+          
+          echo ""
+          echo "📊 Summary:"
+          echo "  - .p12 files: $P12_COUNT"
+          echo "  - .mobileprovision files: $MP_COUNT"
+          
+          if [ "$P12_COUNT" -eq 0 ] || [ "$MP_COUNT" -eq 0 ]; then
+            echo "❌ Missing required files!"
+            exit 1
+          fi
+
+      # ─── 9. Upload Artifacts ───────────────────────────────────
+      - name: Upload P12 Certificate
         uses: actions/upload-artifact@v4
         with:
-          name: ios-certificates
-          path: ./*.mobileprovision # สั่งให้เก็บไฟล์ฟันเฟืองที่ได้ออกมาให้พี่โหลด
+          name: ios-development-certificate
+          path: ./certs-output/*.p12
+          retention-days: 3    # เก็บแค่ 3 วันเพื่อความปลอดภัย
+          if-no-files-found: error
+
+      - name: Upload Provisioning Profile
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-provisioning-profile
+          path: ./certs-output/*.mobileprovision
+          retention-days: 3
+          if-no-files-found: error
+
+      # ─── 10. Cleanup sensitive files ───────────────────────────
+      - name: Cleanup Sensitive Files from Runner
+        if: always()
+        run: |
+          rm -rf ./certs-output
+          security delete-keychain ~/Library/Keychains/fastlane_tmp_keychain-db 2>/dev/null || true
+          echo "✅ Cleanup complete"
