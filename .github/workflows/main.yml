@@ -13,7 +13,6 @@ jobs:
     runs-on: macos-latest
 
     steps:
-      # ─── 1. เตรียมเครื่อง ──────────────────────────────────────
       - name: Checkout Repository
         uses: actions/checkout@v4
 
@@ -29,7 +28,6 @@ jobs:
       - name: Create Output Directory
         run: mkdir -p ./certs-output
 
-      # ─── 2. ดึงใบเซอร์ (.cer) ──────────────────────────────────
       - name: Fetch Development Certificate
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
@@ -42,11 +40,8 @@ jobs:
             --username "$APPLE_ID" \
             --team_id "IAJTAPZQYCLT" \
             --output_path "./certs-output" \
-            --generate_apple_certs true \
-            --skip_set_partition_list true \
-            --skip_itc true
+            --generate_apple_certs true
 
-      # ─── 3. ดึง Profile (.mobileprovision) ─────────────────────
       - name: Fetch Development Provisioning Profile
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
@@ -61,37 +56,42 @@ jobs:
             --app_identifier "${{ github.event.inputs.app_identifier }}" \
             --output_path "./certs-output" \
             --force \
-            --skip_install \
-            --skip_itc true
+            --skip_install
 
-      # ─── 4. แปลงร่างเป็น .p12 (ดึงจาก Keychain ระบบ) ────────────
       - name: Convert to P12
         run: |
           cd ./certs-output
           CER_FILE=$(find . -name "*.cer" | head -1)
-          if [ -n "$CER_FILE" ]; then
-            echo "✅ พบไฟล์ .cer กำลังเริ่มแปลงเป็น .p12..."
-            # ใช้พาสเวิร์ด 1234 เป็นค่ามาตรฐานสำหรับไฟล์ P12 (เอาไว้ใส่ในแอป Sign)
+          KEY_FILE=$(find . -name "*.p12" | head -1)
+          if [ -n "$CER_FILE" ] && [ -z "$KEY_FILE" ]; then
             security import "$CER_FILE" -k ~/Library/Keychains/login.keychain-db
             security export \
               -k ~/Library/Keychains/login.keychain-db \
               -t identities \
               -f pkcs12 \
-              -P "1234" \
-              -o "certificate_for_sign.p12"
-            echo "✅ แปลงไฟล์สำเร็จ!"
-          else
-            echo "❌ ไม่พบไฟล์ใบเซอร์ที่จะแปลง!"
-            exit 1
+              -P "${{ secrets.CERT_PASSWORD }}" \
+              -o "development_certificate.p12"
           fi
 
-      # ─── 5. ส่งไฟล์ให้พี่บอสโหลด ───────────────────────────────
-      - name: List & Upload Results
+      - name: List Files
         run: ls -lah ./certs-output/
 
-      - name: Upload Artifacts
+      - name: Upload Certificate
         uses: actions/upload-artifact@v4
         with:
-          name: ios-ready-to-sign
-          path: ./certs-output/*
+          name: ios-development-certificate
+          path: ./certs-output/*.p12
           retention-days: 3
+          if-no-files-found: error
+
+      - name: Upload Provisioning Profile
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-provisioning-profile
+          path: ./certs-output/*.mobileprovision
+          retention-days: 3
+          if-no-files-found: error
+
+      - name: Cleanup
+        if: always()
+        run: rm -rf ./certs-output
