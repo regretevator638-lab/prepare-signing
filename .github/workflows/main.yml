@@ -13,6 +13,7 @@ jobs:
     runs-on: macos-latest
 
     steps:
+      # ─── 1. เตรียมเครื่อง ──────────────────────────────────────
       - name: Checkout Repository
         uses: actions/checkout@v4
 
@@ -28,13 +29,13 @@ jobs:
       - name: Create Output Directory
         run: mkdir -p ./certs-output
 
-      # ─── 5. Fetch Development Certificate (เพิ่มก้อนทอง + เลขทีม) ───
+      # ─── 2. ดึงใบเซอร์ (.cer) ──────────────────────────────────
       - name: Fetch Development Certificate
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           FASTLANE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          FASTLANE_SESSION: ${{ secrets.FASTLANE_SESSION }} # ห้ามขาด! ไม่งั้นเลข 6 หลักเด้ง
+          FASTLANE_SESSION: ${{ secrets.FASTLANE_SESSION }}
         run: |
           fastlane cert \
             --development \
@@ -42,15 +43,16 @@ jobs:
             --team_id "IAJTAPZQYCLT" \
             --output_path "./certs-output" \
             --generate_apple_certs true \
-            --skip_set_partition_list true
+            --skip_set_partition_list true \
+            --skip_itc true
 
-      # ─── 6. Fetch Provisioning Profile (เพิ่มก้อนทอง + เลขทีม) ───
+      # ─── 3. ดึง Profile (.mobileprovision) ─────────────────────
       - name: Fetch Development Provisioning Profile
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           FASTLANE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          FASTLANE_SESSION: ${{ secrets.FASTLANE_SESSION }} # ห้ามขาด!
+          FASTLANE_SESSION: ${{ secrets.FASTLANE_SESSION }}
         run: |
           fastlane sigh \
             --development \
@@ -59,33 +61,37 @@ jobs:
             --app_identifier "${{ github.event.inputs.app_identifier }}" \
             --output_path "./certs-output" \
             --force \
-            --skip_install
+            --skip_install \
+            --skip_itc true
 
-      # ─── 7. แปลงไฟล์เป็น P12 (อันนี้เทคนิคดี ผมเก็บไว้ให้) ────────────
+      # ─── 4. แปลงร่างเป็น .p12 (ดึงจาก Keychain ระบบ) ────────────
       - name: Convert to P12
         run: |
           cd ./certs-output
           CER_FILE=$(find . -name "*.cer" | head -1)
           if [ -n "$CER_FILE" ]; then
-            echo "✅ Found .cer file, converting..."
-            # ใช้พาสเวิร์ดที่พี่ตั้งไว้ใน Secret CERT_PASSWORD (หรือถ้าไม่มี ก็ใส่ 1234 ไปเลย)
+            echo "✅ พบไฟล์ .cer กำลังเริ่มแปลงเป็น .p12..."
+            # ใช้พาสเวิร์ด 1234 เป็นค่ามาตรฐานสำหรับไฟล์ P12 (เอาไว้ใส่ในแอป Sign)
             security import "$CER_FILE" -k ~/Library/Keychains/login.keychain-db
             security export \
               -k ~/Library/Keychains/login.keychain-db \
               -t identities \
               -f pkcs12 \
-              -P "${{ secrets.CERT_PASSWORD || '1234' }}" \
-              -o "development_certificate.p12"
+              -P "1234" \
+              -o "certificate_for_sign.p12"
+            echo "✅ แปลงไฟล์สำเร็จ!"
           else
-            echo "❌ No .cer file found!"
+            echo "❌ ไม่พบไฟล์ใบเซอร์ที่จะแปลง!"
+            exit 1
           fi
 
-      - name: List Files
+      # ─── 5. ส่งไฟล์ให้พี่บอสโหลด ───────────────────────────────
+      - name: List & Upload Results
         run: ls -lah ./certs-output/
 
-      - name: Upload Results
+      - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ios-package
+          name: ios-ready-to-sign
           path: ./certs-output/*
           retention-days: 3
