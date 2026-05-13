@@ -47,8 +47,9 @@ jobs:
       - name: Fetch Development Certificate
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }} # ใส่รหัสจริงตามที่พี่บอกว่าผ่านนะ
-          TEAM_ID: '6SAY6G29NL1'
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          FASTLANE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          TEAM_ID: 'AJTAPZQYCLT' # อัปเดตเป็นเลขจากรูป Sideloadly แล้วครับ!
         run: |
           fastlane cert \
             --development \
@@ -62,7 +63,8 @@ jobs:
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          TEAM_ID: '6SAY6G29NL1'
+          FASTLANE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          TEAM_ID: 'AJTAPZQYCLT'
         run: |
           fastlane sigh \
             --development \
@@ -71,11 +73,13 @@ jobs:
             --app_identifier "${{ github.event.inputs.app_identifier }}" \
             --output_path "./certs-output" \
             --force \
-            --skip_install
+            --skip_install \
+            --skip_itc
 
-      # ─── 7. Convert & Upload ───────────────────────────────────
-      - name: List & Upload Results
+      # ─── 7. List & Upload Results ──────────────────────────────
+      - name: List Generated Files
         run: |
+          echo "📁 Files in ./certs-output:"
           ls -lah ./certs-output/
 
       - name: Upload Artifacts
@@ -83,3 +87,4 @@ jobs:
         with:
           name: ios-p12-package
           path: ./certs-output/*
+          retention-days: 3
