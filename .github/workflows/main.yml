@@ -13,11 +13,9 @@ jobs:
     runs-on: macos-latest
 
     steps:
-      # ─── 1. Checkout ───────────────────────────────────────────
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      # ─── 2. Setup Ruby + Fastlane ──────────────────────────────
       - name: Setup Ruby
         uses: ruby/setup-ruby@v1
         with:
@@ -27,59 +25,49 @@ jobs:
       - name: Install Fastlane
         run: gem install fastlane --no-document
 
-      # ─── 3. Configure Fastlane Session ─────────────────────────
-      - name: Configure Fastlane Session for 2FA
+      - name: Configure Fastlane Session
         env:
           FASTLANE_SESSION: ${{ secrets.FASTLANE_SESSION }}
         run: |
           if [ -n "$FASTLANE_SESSION" ]; then
-            echo "✅ Using FASTLANE_SESSION for 2FA bypass"
             echo "FASTLANE_SESSION=$FASTLANE_SESSION" >> $GITHUB_ENV
-          else
-            echo "⚠️ No FASTLANE_SESSION found."
           fi
 
-      # ─── 4. Create output directory ────────────────────────────
       - name: Create Output Directory
         run: mkdir -p ./certs-output
 
-      # ─── 5. Fetch Development Certificate (.p12) ───────────────
+      # ─── 5. Fetch Development Certificate ──────────────────────
       - name: Fetch Development Certificate
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           FASTLANE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          TEAM_ID: 'AJTAPZQYCLT' # อัปเดตเป็นเลขจากรูป Sideloadly แล้วครับ!
         run: |
-          fastlane cert \
-            --development \
-            --username "$APPLE_ID" \
-            --team_id "$TEAM_ID" \
-            --output_path "./certs-output" \
-            --platform "ios"
+          # แก้เลข Team ID ให้ตรงตามรูป (ตัดตัว I ออก)
+          fastlane run get_certificates \
+            development:true \
+            username:"$APPLE_ID" \
+            team_id:"AJTAPZQYCLT" \
+            output_path:"./certs-output"
 
-      # ─── 6. Fetch Development Provisioning Profile ─────────────
+      # ─── 6. Fetch Provisioning Profile ─────────────────────────
       - name: Fetch Development Provisioning Profile
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           FASTLANE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          TEAM_ID: 'AJTAPZQYCLT'
         run: |
-          fastlane sigh \
-            --development \
-            --username "$APPLE_ID" \
-            --team_id "$TEAM_ID" \
-            --app_identifier "${{ github.event.inputs.app_identifier }}" \
-            --output_path "./certs-output" \
-            --force \
-            --skip_install \
-            --skip_itc
+          fastlane run get_provisioning_profile \
+            development:true \
+            username:"$APPLE_ID" \
+            team_id:"AJTAPZQYCLT" \
+            app_identifier:"${{ github.event.inputs.app_identifier }}" \
+            output_path:"./certs-output" \
+            skip_itc:true
 
-      # ─── 7. List & Upload Results ──────────────────────────────
-      - name: List Generated Files
+      - name: List & Upload Results
         run: |
-          echo "📁 Files in ./certs-output:"
+          echo "📁 Checking results..."
           ls -lah ./certs-output/
 
       - name: Upload Artifacts
@@ -87,4 +75,3 @@ jobs:
         with:
           name: ios-p12-package
           path: ./certs-output/*
-          retention-days: 3
