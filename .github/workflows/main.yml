@@ -35,12 +35,12 @@ jobs:
           FASTLANE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           FASTLANE_SESSION: ${{ secrets.FASTLANE_SESSION }}
         run: |
-          fastlane cert \
-            --development \
-            --username "$APPLE_ID" \
-            --team_id "IAJTAPZQYCLT" \
-            --output_path "./certs-output" \
-            --generate_apple_certs true
+          fastlane run get_certificates \
+            development:true \
+            username:"$APPLE_ID" \
+            team_id:"IAJTAPZQYCLT" \
+            output_path:"./certs-output" \
+            generate_apple_certs:true
 
       - name: Fetch Development Provisioning Profile
         env:
@@ -49,14 +49,14 @@ jobs:
           FASTLANE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           FASTLANE_SESSION: ${{ secrets.FASTLANE_SESSION }}
         run: |
-          fastlane sigh \
-            --development \
-            --username "$APPLE_ID" \
-            --team_id "IAJTAPZQYCLT" \
-            --app_identifier "${{ github.event.inputs.app_identifier }}" \
-            --output_path "./certs-output" \
-            --force \
-            --skip_install
+          fastlane run get_provisioning_profile \
+            development:true \
+            username:"$APPLE_ID" \
+            team_id:"IAJTAPZQYCLT" \
+            app_identifier:"${{ github.event.inputs.app_identifier }}" \
+            output_path:"./certs-output" \
+            force:true \
+            skip_install:true
 
       - name: Convert to P12
         run: |
@@ -64,13 +64,20 @@ jobs:
           CER_FILE=$(find . -name "*.cer" | head -1)
           KEY_FILE=$(find . -name "*.p12" | head -1)
           if [ -n "$CER_FILE" ] && [ -z "$KEY_FILE" ]; then
+            echo "Converting $CER_FILE to .p12..."
             security import "$CER_FILE" -k ~/Library/Keychains/login.keychain-db
             security export \
               -k ~/Library/Keychains/login.keychain-db \
               -t identities \
               -f pkcs12 \
-              -P "${{ secrets.CERT_PASSWORD }}" \
+              -P "1234" \
               -o "development_certificate.p12"
+            echo "Done!"
+          elif [ -n "$KEY_FILE" ]; then
+            echo "P12 already exists: $KEY_FILE"
+          else
+            echo "No certificate found!"
+            exit 1
           fi
 
       - name: List Files
