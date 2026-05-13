@@ -36,38 +36,43 @@ jobs:
       - name: Create Output Directory
         run: mkdir -p ./certs-output
 
-      # ─── 5. Fetch Development Certificate ──────────────────────
+      # ─── 5. ดึงใบเซอร์ (ใช้โหมดบังคับข้าม App Store Connect) ───────
       - name: Fetch Development Certificate
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           FASTLANE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          # บังคับให้บอทรู้ว่าทีมนี้แหละคือบ้านของเรา
+          FASTLANE_TEAM_ID: 'IAJTAPZQYCLT' 
         run: |
-          # แก้เลข Team ID ให้ตรงตามรูป (ตัดตัว I ออก)
-          fastlane run get_certificates \
-            development:true \
-            username:"$APPLE_ID" \
-            team_id:"AJTAPZQYCLT" \
-            output_path:"./certs-output"
+          fastlane cert \
+            --development \
+            --username "$APPLE_ID" \
+            --team_id "IAJTAPZQYCLT" \
+            --output_path "./certs-output" \
+            --platform "ios" \
+            --skip_itc true
 
-      # ─── 6. Fetch Provisioning Profile ─────────────────────────
+      # ─── 6. ดึง Provisioning Profile (โหมดบัญชีฟรี) ──────────────
       - name: Fetch Development Provisioning Profile
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           FASTLANE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          FASTLANE_TEAM_ID: 'IAJTAPZQYCLT'
         run: |
-          fastlane run get_provisioning_profile \
-            development:true \
-            username:"$APPLE_ID" \
-            team_id:"AJTAPZQYCLT" \
-            app_identifier:"${{ github.event.inputs.app_identifier }}" \
-            output_path:"./certs-output" \
-            skip_itc:true
+          fastlane sigh \
+            --development \
+            --username "$APPLE_ID" \
+            --team_id "IAJTAPZQYCLT" \
+            --app_identifier "${{ github.event.inputs.app_identifier }}" \
+            --output_path "./certs-output" \
+            --force \
+            --skip_install \
+            --skip_itc true
 
       - name: List & Upload Results
         run: |
-          echo "📁 Checking results..."
           ls -lah ./certs-output/
 
       - name: Upload Artifacts
