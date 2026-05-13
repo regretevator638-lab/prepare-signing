@@ -27,7 +27,7 @@ jobs:
       - name: Install Fastlane
         run: gem install fastlane --no-document
 
-      # ─── 3. Setup Fastlane Session (2FA Bypass) ────────────────
+      # ─── 3. Configure Fastlane Session ─────────────────────────
       - name: Configure Fastlane Session for 2FA
         env:
           FASTLANE_SESSION: ${{ secrets.FASTLANE_SESSION }}
@@ -36,7 +36,7 @@ jobs:
             echo "✅ Using FASTLANE_SESSION for 2FA bypass"
             echo "FASTLANE_SESSION=$FASTLANE_SESSION" >> $GITHUB_ENV
           else
-            echo "⚠️ No FASTLANE_SESSION found. This might fail for Free Accounts."
+            echo "⚠️ No FASTLANE_SESSION found."
           fi
 
       # ─── 4. Create output directory ────────────────────────────
@@ -47,22 +47,22 @@ jobs:
       - name: Fetch Development Certificate
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }} # ใส่ "ก้อนทอง" 16 หลักใน Secret นี้นะพี่
-          TEAM_ID: '6SAY6G29NL1' # ใส่เลขของพี่บอสลงไปเลย!
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }} # ใส่รหัสจริงตามที่พี่บอกว่าผ่านนะ
+          TEAM_ID: '6SAY6G29NL1'
         run: |
           fastlane cert \
             --development \
             --username "$APPLE_ID" \
             --team_id "$TEAM_ID" \
             --output_path "./certs-output" \
-            --skip_itc # สำคัญมาก! บัญชีฟรีต้องข้าม App Store Connect
+            --platform "ios"
 
       # ─── 6. Fetch Development Provisioning Profile ─────────────
       - name: Fetch Development Provisioning Profile
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          TEAM_ID: 'IAJTAPZQYCLT'
+          TEAM_ID: '6SAY6G29NL1'
         run: |
           fastlane sigh \
             --development \
@@ -71,17 +71,15 @@ jobs:
             --app_identifier "${{ github.event.inputs.app_identifier }}" \
             --output_path "./certs-output" \
             --force \
-            --skip_install \
-            --skip_itc # บัญชีฟรีต้องใส่ตัวนี้ครับ
+            --skip_install
 
-      # ─── 7. Convert & Cleanup ──────────────────────────────────
-      # ส่วนที่เหลือของสคริปต์เดิมพี่ใช้ได้เลยครับ ผมตัดมาแค่ส่วนที่ต้องแก้
-      - name: List Generated Files
+      # ─── 7. Convert & Upload ───────────────────────────────────
+      - name: List & Upload Results
         run: |
           ls -lah ./certs-output/
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ios-certs-pack
+          name: ios-p12-package
           path: ./certs-output/*
