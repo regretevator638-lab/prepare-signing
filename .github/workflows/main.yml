@@ -25,54 +25,70 @@ jobs:
       - name: Install Fastlane
         run: gem install fastlane --no-document
 
-      - name: Configure Fastlane Session
-        env:
-          FASTLANE_SESSION: ${{ secrets.FASTLANE_SESSION }}
-        run: |
-          if [ -n "$FASTLANE_SESSION" ]; then
-            echo "FASTLANE_SESSION=$FASTLANE_SESSION" >> $GITHUB_ENV
-          fi
-
       - name: Create Output Directory
         run: mkdir -p ./certs-output
 
-      # ─── 5. ดึงใบเซอร์ (ใช้เลขทีม IAJTAPZQYCLT ตามที่พี่บอสเห็นเป๊ะๆ) ───
       - name: Fetch Development Certificate
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           FASTLANE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
         run: |
-          # ใช้คำสั่ง get_certificates เพราะมันคุยกับ Personal Team เก่งกว่า
-          fastlane run get_certificates \
-            development:true \
-            username:"$APPLE_ID" \
-            team_id:"IAJTAPZQYCLT" \
-            output_path:"./certs-output"
+          fastlane cert \
+            --development \
+            --username "$APPLE_ID" \
+            --output_path "./certs-output" \
+            --generate_apple_certs true \
+            --skip_set_partition_list true
 
-      # ─── 6. ดึง Provisioning Profile ─────────────────────────
       - name: Fetch Development Provisioning Profile
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           FASTLANE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
         run: |
-          fastlane run get_provisioning_profile \
-            development:true \
-            username:"$APPLE_ID" \
-            team_id:"IAJTAPZQYCLT" \
-            app_identifier:"${{ github.event.inputs.app_identifier }}" \
-            output_path:"./certs-output" \
-            skip_itc:true
+          fastlane sigh \
+            --development \
+            --username "$APPLE_ID" \
+            --app_identifier "${{ github.event.inputs.app_identifier }}" \
+            --output_path "./certs-output" \
+            --force \
+            --skip_install
 
-      - name: List & Upload Results
+      - name: Convert to P12
         run: |
-          echo "📁 Checking for files..."
-          ls -lah ./certs-output/
+          cd ./certs-output
+          CER_FILE=$(find . -name "*.cer" | head -1)
+          KEY_FILE=$(find . -name "*.p12" | head -1)
+          if [ -n "$CER_FILE" ] && [ -z "$KEY_FILE" ]; then
+            security import "$CER_FILE" -k ~/Library/Keychains/login.keychain-db
+            security export \
+              -k ~/Library/Keychains/login.keychain-db \
+              -t identities \
+              -f pkcs12 \
+              -P "${{ secrets.CERT_PASSWORD }}" \
+              -o "development_certificate.p12"
+          fi
 
-      - name: Upload Artifacts
+      - name: List Files
+        run: ls -lah ./certs-output/
+
+      - name: Upload Certificate
         uses: actions/upload-artifact@v4
         with:
-          name: ios-p12-package
-          path: ./certs-output/*
+          name: ios-development-certificate
+          path: ./certs-output/*.p12
           retention-days: 3
+          if-no-files-found: error
+
+      - name: Upload Provisioning Profile
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-provisioning-profile
+          path: ./certs-output/*.mobileprovision
+          retention-days: 3
+          if-no-files-found: error
+
+      - name: Cleanup
+        if: always()
+        run: rm -rf ./certs-output
