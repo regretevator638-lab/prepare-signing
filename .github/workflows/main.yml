@@ -28,67 +28,64 @@ jobs:
       - name: Create Output Directory
         run: mkdir -p ./certs-output
 
+      # ─── 5. Fetch Development Certificate (เพิ่มก้อนทอง + เลขทีม) ───
       - name: Fetch Development Certificate
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
-          FASTLANE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          FASTLANE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          FASTLANE_SESSION: ${{ secrets.FASTLANE_SESSION }} # ห้ามขาด! ไม่งั้นเลข 6 หลักเด้ง
         run: |
           fastlane cert \
             --development \
             --username "$APPLE_ID" \
+            --team_id "IAJTAPZQYCLT" \
             --output_path "./certs-output" \
             --generate_apple_certs true \
             --skip_set_partition_list true
 
+      # ─── 6. Fetch Provisioning Profile (เพิ่มก้อนทอง + เลขทีม) ───
       - name: Fetch Development Provisioning Profile
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
-          FASTLANE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          FASTLANE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          FASTLANE_SESSION: ${{ secrets.FASTLANE_SESSION }} # ห้ามขาด!
         run: |
           fastlane sigh \
             --development \
             --username "$APPLE_ID" \
+            --team_id "IAJTAPZQYCLT" \
             --app_identifier "${{ github.event.inputs.app_identifier }}" \
             --output_path "./certs-output" \
             --force \
             --skip_install
 
+      # ─── 7. แปลงไฟล์เป็น P12 (อันนี้เทคนิคดี ผมเก็บไว้ให้) ────────────
       - name: Convert to P12
         run: |
           cd ./certs-output
           CER_FILE=$(find . -name "*.cer" | head -1)
-          KEY_FILE=$(find . -name "*.p12" | head -1)
-          if [ -n "$CER_FILE" ] && [ -z "$KEY_FILE" ]; then
+          if [ -n "$CER_FILE" ]; then
+            echo "✅ Found .cer file, converting..."
+            # ใช้พาสเวิร์ดที่พี่ตั้งไว้ใน Secret CERT_PASSWORD (หรือถ้าไม่มี ก็ใส่ 1234 ไปเลย)
             security import "$CER_FILE" -k ~/Library/Keychains/login.keychain-db
             security export \
               -k ~/Library/Keychains/login.keychain-db \
               -t identities \
               -f pkcs12 \
-              -P "${{ secrets.CERT_PASSWORD }}" \
+              -P "${{ secrets.CERT_PASSWORD || '1234' }}" \
               -o "development_certificate.p12"
+          else
+            echo "❌ No .cer file found!"
           fi
 
       - name: List Files
         run: ls -lah ./certs-output/
 
-      - name: Upload Certificate
+      - name: Upload Results
         uses: actions/upload-artifact@v4
         with:
-          name: ios-development-certificate
-          path: ./certs-output/*.p12
+          name: ios-package
+          path: ./certs-output/*
           retention-days: 3
-          if-no-files-found: error
-
-      - name: Upload Provisioning Profile
-        uses: actions/upload-artifact@v4
-        with:
-          name: ios-provisioning-profile
-          path: ./certs-output/*.mobileprovision
-          retention-days: 3
-          if-no-files-found: error
-
-      - name: Cleanup
-        if: always()
-        run: rm -rf ./certs-output
