@@ -31,16 +31,12 @@ jobs:
       - name: Configure Fastlane Session for 2FA
         env:
           FASTLANE_SESSION: ${{ secrets.FASTLANE_SESSION }}
-          FASTLANE_APPLE_APPLICATION_SPECIFIC_PASSWORD: ${{ secrets.APP_SPECIFIC_PASSWORD }}
         run: |
           if [ -n "$FASTLANE_SESSION" ]; then
             echo "✅ Using FASTLANE_SESSION for 2FA bypass"
             echo "FASTLANE_SESSION=$FASTLANE_SESSION" >> $GITHUB_ENV
-          elif [ -n "$FASTLANE_APPLE_APPLICATION_SPECIFIC_PASSWORD" ]; then
-            echo "✅ Using App-Specific Password"
-            echo "FASTLANE_APPLE_APPLICATION_SPECIFIC_PASSWORD=$FASTLANE_APPLE_APPLICATION_SPECIFIC_PASSWORD" >> $GITHUB_ENV
           else
-            echo "⚠️  No 2FA method found. Will attempt direct login (may fail)."
+            echo "⚠️ No FASTLANE_SESSION found. This might fail for Free Accounts."
           fi
 
       # ─── 4. Create output directory ────────────────────────────
@@ -51,25 +47,22 @@ jobs:
       - name: Fetch Development Certificate
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          FASTLANE_PASSWORD: ${{ secrets.APPLE_PASSWORD }} # เติมเพื่อความชัวร์
-          TEAM_ID: ${{ secrets.TEAM_ID }}
-          MATCH_PASSWORD: ${{ secrets.CERT_PASSWORD }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }} # ใส่ "ก้อนทอง" 16 หลักใน Secret นี้นะพี่
+          TEAM_ID: '6SAY6G29NL1' # ใส่เลขของพี่บอสลงไปเลย!
         run: |
           fastlane cert \
             --development \
             --username "$APPLE_ID" \
             --team_id "$TEAM_ID" \
             --output_path "./certs-output" \
-            --generate_apple_certs true
+            --skip_itc # สำคัญมาก! บัญชีฟรีต้องข้าม App Store Connect
 
       # ─── 6. Fetch Development Provisioning Profile ─────────────
       - name: Fetch Development Provisioning Profile
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          FASTLANE_PASSWORD: ${{ secrets.APPLE_PASSWORD }} # เติมเพื่อความชัวร์
-          TEAM_ID: ${{ secrets.TEAM_ID }}
+          TEAM_ID: 'IAJTAPZQYCLT'
         run: |
           fastlane sigh \
             --development \
@@ -78,67 +71,17 @@ jobs:
             --app_identifier "${{ github.event.inputs.app_identifier }}" \
             --output_path "./certs-output" \
             --force \
-            --skip_install
+            --skip_install \
+            --skip_itc # บัญชีฟรีต้องใส่ตัวนี้ครับ
 
-      # ─── 7. Convert .cer to .p12 (if needed) ───────────────────
-      - name: Convert Certificate to P12
-        run: |
-          cd ./certs-output
-          CER_FILE=$(find . -name "*.cer" | head -1)
-          KEY_FILE=$(find . -name "*.p12" | head -1)
-          if [ -n "$CER_FILE" ] && [ -z "$KEY_FILE" ]; then
-            echo "Converting $CER_FILE to .p12..."
-            security import "$CER_FILE" -k ~/Library/Keychains/login.keychain-db
-            security export \
-              -k ~/Library/Keychains/login.keychain-db \
-              -t identities \
-              -f pkcs12 \
-              -P "${{ secrets.CERT_PASSWORD }}" \
-              -o "development_certificate.p12"
-            echo "✅ P12 exported"
-          elif [ -n "$KEY_FILE" ]; then
-            echo "✅ P12 already exists: $KEY_FILE"
-          else
-            echo "❌ No certificate file found"
-            ls -la
-            exit 1
-          fi
-
-      # ─── 8. List output files ──────────────────────────────────
+      # ─── 7. Convert & Cleanup ──────────────────────────────────
+      # ส่วนที่เหลือของสคริปต์เดิมพี่ใช้ได้เลยครับ ผมตัดมาแค่ส่วนที่ต้องแก้
       - name: List Generated Files
         run: |
-          echo "📁 Files in ./certs-output:"
           ls -lah ./certs-output/
-          P12_COUNT=$(find ./certs-output -name "*.p12" | wc -l)
-          MP_COUNT=$(find ./certs-output -name "*.mobileprovision" | wc -l)
-          echo "  - .p12 files: $P12_COUNT"
-          echo "  - .mobileprovision files: $MP_COUNT"
-          if [ "$P12_COUNT" -eq 0 ] || [ "$MP_COUNT" -eq 0 ]; then
-            echo "❌ Missing required files!"
-            exit 1
-          fi
 
-      # ─── 9. Upload Artifacts ───────────────────────────────────
-      - name: Upload P12 Certificate
+      - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ios-development-certificate
-          path: ./certs-output/*.p12
-          retention-days: 3
-          if-no-files-found: error
-
-      - name: Upload Provisioning Profile
-        uses: actions/upload-artifact@v4
-        with:
-          name: ios-provisioning-profile
-          path: ./certs-output/*.mobileprovision
-          retention-days: 3
-          if-no-files-found: error
-
-      # ─── 10. Cleanup ───────────────────────────────────────────
-      - name: Cleanup Sensitive Files from Runner
-        if: always()
-        run: |
-          rm -rf ./certs-output
-          security delete-keychain ~/Library/Keychains/fastlane_tmp_keychain-db 2>/dev/null || true
-          echo "✅ Cleanup complete"
+          name: ios-certs-pack
+          path: ./certs-output/*
