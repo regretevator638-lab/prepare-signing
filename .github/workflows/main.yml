@@ -36,43 +36,38 @@ jobs:
       - name: Create Output Directory
         run: mkdir -p ./certs-output
 
-      # ─── 5. ดึงใบเซอร์ (ใช้โหมดบังคับข้าม App Store Connect) ───────
+      # ─── 5. ดึงใบเซอร์ (ใช้เลขทีม IAJTAPZQYCLT ตามที่พี่บอสเห็นเป๊ะๆ) ───
       - name: Fetch Development Certificate
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           FASTLANE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          # บังคับให้บอทรู้ว่าทีมนี้แหละคือบ้านของเรา
-          FASTLANE_TEAM_ID: 'IAJTAPZQYCLT' 
         run: |
-          fastlane cert \
-            --development \
-            --username "$APPLE_ID" \
-            --team_id "IAJTAPZQYCLT" \
-            --output_path "./certs-output" \
-            --platform "ios" \
-            --skip_itc true
+          # ใช้คำสั่ง get_certificates เพราะมันคุยกับ Personal Team เก่งกว่า
+          fastlane run get_certificates \
+            development:true \
+            username:"$APPLE_ID" \
+            team_id:"IAJTAPZQYCLT" \
+            output_path:"./certs-output"
 
-      # ─── 6. ดึง Provisioning Profile (โหมดบัญชีฟรี) ──────────────
+      # ─── 6. ดึง Provisioning Profile ─────────────────────────
       - name: Fetch Development Provisioning Profile
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           FASTLANE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          FASTLANE_TEAM_ID: 'IAJTAPZQYCLT'
         run: |
-          fastlane sigh \
-            --development \
-            --username "$APPLE_ID" \
-            --team_id "IAJTAPZQYCLT" \
-            --app_identifier "${{ github.event.inputs.app_identifier }}" \
-            --output_path "./certs-output" \
-            --force \
-            --skip_install \
-            --skip_itc true
+          fastlane run get_provisioning_profile \
+            development:true \
+            username:"$APPLE_ID" \
+            team_id:"IAJTAPZQYCLT" \
+            app_identifier:"${{ github.event.inputs.app_identifier }}" \
+            output_path:"./certs-output" \
+            skip_itc:true
 
       - name: List & Upload Results
         run: |
+          echo "📁 Checking for files..."
           ls -lah ./certs-output/
 
       - name: Upload Artifacts
@@ -80,3 +75,4 @@ jobs:
         with:
           name: ios-p12-package
           path: ./certs-output/*
+          retention-days: 3
